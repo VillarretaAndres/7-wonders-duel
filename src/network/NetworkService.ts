@@ -93,9 +93,30 @@ class NetworkService {
     private audioCtx: AudioContext | null = null;
 
     constructor() {
-        // When running via Vite dev server (port 5173) or an external tunnel (Cloudflared / HTTPS),
-        // route both HTTP and WebSockets through Vite's "/colyseus" and "/api" proxy on the same origin!
-        // That way ONLY port 5173 needs to be exposed in cloudflared.
+        // 1. Check if VITE_BACKEND_URL is configured (in client/.env or hosting platform variables)
+        const envBackendUrl = (
+            (import.meta as any).env?.VITE_BACKEND_URL || ""
+        )
+            .trim()
+            .replace(/\/+$/, "");
+
+        if (envBackendUrl) {
+            // Normalize HTTP(S) URL for REST endpoints (/api/rooms, /api/room-by-code)
+            this.httpBaseUrl = envBackendUrl
+                .replace(/^wss:\/\//i, "https://")
+                .replace(/^ws:\/\//i, "http://");
+
+            // Normalize WS(S) URL for Colyseus Client
+            const wsUrl = envBackendUrl
+                .replace(/^https:\/\//i, "wss://")
+                .replace(/^http:\/\//i, "ws://");
+
+            this.client = new Client(wsUrl);
+            return;
+        }
+
+        // 2. Fallback when VITE_BACKEND_URL is empty:
+        // Uses Vite's local "/colyseus" and "/api" proxy (or direct "/" if on port 2567)
         const isDirectColyseusPort = window.location.port === "2567";
         if (isDirectColyseusPort) {
             this.httpBaseUrl = "";
